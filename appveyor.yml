@@ -1,64 +1,65 @@
 # appveyor.yml
-version: 1.0.{build} 
-image: Ubuntu
-
-environment:
-  DOCKER_CLI_VERSION: latest
-
-init:
-  - sudo apt-get update
-  - sudo apt-get install -y docker.io
-
-before_build:
-  - echo "Creating Dockerfile"
-  - echo -e "FROM ubuntu:latest\nRUN apt-get update && apt-get install -y curl\nRUN curl https://pkg.cloudflareclient.com/pubkey.gpg | apt-key add -\nRUN echo 'deb [arch=amd64] https://pkg.cloudflareclient.com/ focal main' > /etc/apt/sources.list.d/cloudflare-client.list\nRUN apt-get update && apt-get install -y cloudflare-warp\nCMD [\"/bin/bash\"]" > Dockerfile
-
-build_script:
-  - echo "Building Docker image"
-  - docker build -t warp-cli-container .
-
-test_script:
-  - echo "Running 5 Docker containers"
-  - for i in {1..5}; do docker run --name warp-container-$i -d warp-cli-container sleep 300; done
-  - for i in {1..5}; do docker exec warp-container-$i warp-cli register; done
-  - for i in {1..5}; do docker exec warp-container-$i warp-cli connect; done
-  - for i in {1..5}; do docker exec warp-container-$i curl -4 ifconfig.co; done
-
-after_test:
-  - echo "Cleaning up Docker containers"
-  - for i in {1..5}; do docker rm -f warp-container-$i; done
-
-artifacts:
-  - path: .\Dockerfile
-    name: Dockerfile# appveyor.yml
 version: 1.0.{build}
-image: Ubuntu
-
-environment:
-  DOCKER_CLI_VERSION: latest
+image: Visual Studio 2019
 
 init:
-  - sudo apt-get update
-  - sudo apt-get install -y docker.io
+  - ps: |
+      # Install Chocolatey (Windows package manager)
+      Set-ExecutionPolicy Bypass -Scope Process -Force; `
+      [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
+      iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
+      # Install Docker using Chocolatey
+      choco install -y docker-desktop
+      Start-Sleep -s 30
+
+      # Start Docker service
+      Start-Service com.docker.service
+      Start-Sleep -s 30
+
+      # Verify Docker installation
+      docker --version
 
 before_build:
-  - echo "Creating Dockerfile"
-  - echo -e "FROM ubuntu:latest\nRUN apt-get update && apt-get install -y curl\nRUN curl https://pkg.cloudflareclient.com/pubkey.gpg | apt-key add -\nRUN echo 'deb [arch=amd64] https://pkg.cloudflareclient.com/ focal main' > /etc/apt/sources.list.d/cloudflare-client.list\nRUN apt-get update && apt-get install -y cloudflare-warp\nCMD [\"/bin/bash\"]" > Dockerfile
+  - ps: |
+      # Create Dockerfile
+      $dockerfileContent = @"
+      FROM ubuntu:latest
+      RUN apt-get update && apt-get install -y curl
+      RUN curl https://pkg.cloudflareclient.com/pubkey.gpg | apt-key add -
+      RUN echo 'deb [arch=amd64] https://pkg.cloudflareclient.com/ focal main' > /etc/apt/sources.list.d/cloudflare-client.list
+      RUN apt-get update && apt-get install -y cloudflare-warp
+      CMD [\"/bin/bash\"]
+      "@
+      $dockerfileContent | Out-File -FilePath Dockerfile -Encoding ascii
 
 build_script:
-  - echo "Building Docker image"
-  - docker build -t warp-cli-container .
+  - ps: |
+      # Build Docker image
+      docker build -t warp-cli-container .
 
 test_script:
-  - echo "Running 5 Docker containers"
-  - for i in {1..5}; do docker run --name warp-container-$i -d warp-cli-container sleep 300; done
-  - for i in {1..5}; do docker exec warp-container-$i warp-cli register; done
-  - for i in {1..5}; do docker exec warp-container-$i warp-cli connect; done
-  - for i in {1..5}; do docker exec warp-container-$i curl -4 ifconfig.co; done
+  - ps: |
+      # Run 5 Docker containers
+      $containers = @()
+      for ($i = 1; $i -le 5; $i++) {
+          $containers += docker run --name warp-container-$i -d warp-cli-container sleep 300
+      }
+
+      # Register, connect, and print IPv4 address for each container
+      foreach ($container in $containers) {
+          docker exec $container warp-cli register
+          docker exec $container warp-cli connect
+          $ipv4 = docker exec $container curl -4 ifconfig.co
+          Write-Host "$container IPv4: $ipv4"
+      }
 
 after_test:
-  - echo "Cleaning up Docker containers"
-  - for i in {1..5}; do docker rm -f warp-container-$i; done
+  - ps: |
+      # Clean up Docker containers
+      foreach ($container in $containers) {
+          docker rm -f $container
+      }
 
 artifacts:
   - path: .\Dockerfile
