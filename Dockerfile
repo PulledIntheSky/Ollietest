@@ -1,0 +1,65 @@
+# appveyor.yml
+version: 1.0.{build}
+image: Ubuntu
+
+environment:
+  DOCKER_CLI_VERSION: latest
+
+init:
+  - sudo apt-get update
+  - sudo apt-get install -y docker.io
+
+before_build:
+  - echo "Creating Dockerfile"
+  - echo -e "FROM ubuntu:latest\nRUN apt-get update && apt-get install -y curl\nRUN curl https://pkg.cloudflareclient.com/pubkey.gpg | apt-key add -\nRUN echo 'deb [arch=amd64] https://pkg.cloudflareclient.com/ focal main' > /etc/apt/sources.list.d/cloudflare-client.list\nRUN apt-get update && apt-get install -y cloudflare-warp\nCMD [\"/bin/bash\"]" > Dockerfile
+
+build_script:
+  - echo "Building Docker image"
+  - docker build -t warp-cli-container .
+
+test_script:
+  - echo "Running 5 Docker containers"
+  - for i in {1..5}; do docker run --name warp-container-$i -d warp-cli-container sleep 300; done
+  - for i in {1..5}; do docker exec warp-container-$i warp-cli register; done
+  - for i in {1..5}; do docker exec warp-container-$i warp-cli connect; done
+  - for i in {1..5}; do docker exec warp-container-$i curl -4 ifconfig.co; done
+
+after_test:
+  - echo "Cleaning up Docker containers"
+  - for i in {1..5}; do docker rm -f warp-container-$i; done
+
+artifacts:
+  - path: .\Dockerfile
+    name: Dockerfile# appveyor.yml
+version: 1.0.{build}
+image: Ubuntu
+
+environment:
+  DOCKER_CLI_VERSION: latest
+
+init:
+  - sudo apt-get update
+  - sudo apt-get install -y docker.io
+
+before_build:
+  - echo "Creating Dockerfile"
+  - echo -e "FROM ubuntu:latest\nRUN apt-get update && apt-get install -y curl\nRUN curl https://pkg.cloudflareclient.com/pubkey.gpg | apt-key add -\nRUN echo 'deb [arch=amd64] https://pkg.cloudflareclient.com/ focal main' > /etc/apt/sources.list.d/cloudflare-client.list\nRUN apt-get update && apt-get install -y cloudflare-warp\nCMD [\"/bin/bash\"]" > Dockerfile
+
+build_script:
+  - echo "Building Docker image"
+  - docker build -t warp-cli-container .
+
+test_script:
+  - echo "Running 5 Docker containers"
+  - for i in {1..5}; do docker run --name warp-container-$i -d warp-cli-container sleep 300; done
+  - for i in {1..5}; do docker exec warp-container-$i warp-cli register; done
+  - for i in {1..5}; do docker exec warp-container-$i warp-cli connect; done
+  - for i in {1..5}; do docker exec warp-container-$i curl -4 ifconfig.co; done
+
+after_test:
+  - echo "Cleaning up Docker containers"
+  - for i in {1..5}; do docker rm -f warp-container-$i; done
+
+artifacts:
+  - path: .\Dockerfile
+    name: Dockerfile
